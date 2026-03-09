@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { Analytics } from "@vercel/analytics/react";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -236,7 +237,7 @@ const Features = () => {
             </p>
             <ul className="space-y-4">
               {[
-                "تقليل وقت تعطل الأجهزة بنسبة 90%",
+                "تقليل وقت ت��طل الأجهزة بنسبة 90%",
                 "توفير في استهلاك الإنترنت والكهرباء",
                 "تحديثات دورية للألعاب والبرامج",
                 "استشارات تقنية مجانية لعملائنا"
@@ -322,6 +323,7 @@ export default function App() {
         <Contact />
       </main>
       <Footer />
+      <Analytics />
     </div>
   );
 }
