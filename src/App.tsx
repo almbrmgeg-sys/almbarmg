@@ -1,327 +1,272 @@
-import { motion } from "motion/react";
-import { 
-  Cpu, 
-  Network, 
-  ShieldCheck, 
-  Zap, 
-  MessageCircle, 
-  Server, 
-  Monitor, 
-  Wrench, 
-  Headphones,
-  ExternalLink,
-  CheckCircle2,
-  ChevronLeft
-} from "lucide-react";
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import {useEffect, useMemo, useState} from 'react';
+import {Bell, ClipboardList, HardDrive, LifeBuoy, ShieldCheck, Wrench, FileText, Search, Activity} from 'lucide-react';
+import {apiFetch, login} from './lib/api';
+import type {DashboardData, Device, Maintenance, Task, Ticket} from './types/models';
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+type Page = 'dashboard' | 'tasks' | 'tickets' | 'devices' | 'maintenance' | 'reports';
+
+const modules = [
+  {key: 'dashboard', label: 'لوحة التحكم', icon: Activity},
+  {key: 'tasks', label: 'المهام اليومية', icon: ClipboardList},
+  {key: 'tickets', label: 'التذاكر', icon: LifeBuoy},
+  {key: 'devices', label: 'الأجهزة', icon: HardDrive},
+  {key: 'maintenance', label: 'الصيانة', icon: Wrench},
+  {key: 'reports', label: 'التقارير', icon: FileText}
+] as const;
+
+const requirements = [
+  'إدارة المهام والتذاكر والأجهزة والصيانة في منصة واحدة.',
+  'نظام صلاحيات وتسجيل دخول آمن مع سجل نشاطات.',
+  'لوحة معلومات رئيسية مع مؤشرات أداء ورسوم بيانية.',
+  'بحث وفلترة متقدمة وتنبيهات للمواعيد والمهام المتأخرة.',
+  'أرشفة مرفقات وملفات وربطها بالتذاكر أو الصيانة.'
+];
+
+const dbTables = [
+  'users',
+  'tasks',
+  'tickets',
+  'devices',
+  'maintenance',
+  'alerts',
+  'attachments',
+  'activity_logs'
+];
+
+function StatCard({label, value, icon: Icon}: {label: string; value: number; icon: any}) {
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">{label}</p>
+        <Icon className="w-5 h-5 text-blue-600" />
+      </div>
+      <p className="text-3xl font-bold mt-2">{value}</p>
+    </div>
+  );
 }
 
-const Navbar = () => {
-  return (
-    <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b border-white/5">
-      <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-gradient-to-br from-neon-blue to-neon-purple rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(0,243,255,0.4)]">
-            <Cpu className="text-white w-6 h-6" />
-          </div>
-          <span className="text-2xl font-black tracking-tighter neon-text-blue">المبرمج</span>
-        </div>
-        
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium">
-          <a href="#hero" className="hover:text-neon-blue transition-colors">الرئيسية</a>
-          <a href="#services" className="hover:text-neon-blue transition-colors">خدماتنا</a>
-          <a href="#features" className="hover:text-neon-blue transition-colors">لماذا نحن؟</a>
-          <a href="#contact" className="px-5 py-2 bg-neon-blue/10 border border-neon-blue/30 rounded-full text-neon-blue hover:bg-neon-blue hover:text-dark-bg transition-all">تواصل معنا</a>
-        </div>
-      </div>
-    </nav>
-  );
-};
+function App() {
+  const [token, setToken] = useState('');
+  const [activePage, setActivePage] = useState<Page>('dashboard');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-const Hero = () => {
-  return (
-    <section id="hero" className="relative pt-32 pb-20 overflow-hidden">
-      {/* Background Glows */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-neon-blue/10 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2" />
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-neon-purple/10 blur-[120px] rounded-full translate-y-1/2 -translate-x-1/2" />
-      
-      <div className="max-w-7xl mx-auto px-4 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <motion.div 
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neon-blue/10 border border-neon-blue/20 text-neon-blue text-xs font-bold mb-6">
-              <Zap className="w-3 h-3" />
-              <span>أفضل دعم فني للسايبر كافيه في مصر</span>
-            </div>
-            <h1 className="text-5xl md:text-7xl font-black leading-tight mb-6">
-              نحن نجعل أجهزة <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-blue to-neon-purple">الجيمنج</span> تعمل بأقصى طاقتها
-            </h1>
-            <p className="text-lg text-gray-400 mb-8 max-w-xl leading-relaxed">
-              متخصصون في صيانة وتطوير مقاهي الإنترنت. نوفر لك حلولاً تقنية متكاملة، من صيانة الهاردوير إلى إدارة الشبكات والسيرفرات، لضمان استمرارية عملك دون توقف.
-            </p>
-            
-            <div className="flex flex-wrap gap-4">
-              <a 
-                href="https://wa.me/201515049844" 
-                className="flex items-center gap-2 px-8 py-4 bg-neon-blue text-dark-bg font-bold rounded-xl hover:scale-105 transition-transform shadow-[0_0_20px_rgba(0,243,255,0.3)]"
-              >
-                <MessageCircle className="w-5 h-5" />
-                <span>اطلب الدعم الآن</span>
-              </a>
-              <a 
-                href="#services" 
-                className="flex items-center gap-2 px-8 py-4 bg-white/5 border border-white/10 font-bold rounded-xl hover:bg-white/10 transition-colors"
-              >
-                <span>استكشف خدماتنا</span>
-                <ChevronLeft className="w-5 h-5" />
-              </a>
-            </div>
-          </motion.div>
-          
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1 }}
-            className="relative"
-          >
-            <div className="relative z-10 rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
-              <img 
-                src="https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=1000" 
-                alt="Gaming Cafe Setup" 
-                className="w-full h-auto object-cover"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-dark-bg via-transparent to-transparent" />
-            </div>
-            
-            {/* Floating Stats Card */}
-            <div className="absolute -bottom-6 -right-6 glass-card p-6 rounded-2xl border border-neon-blue/30 shadow-xl z-20">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-neon-blue/20 flex items-center justify-center">
-                  <ShieldCheck className="text-neon-blue w-6 h-6" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold">+50</div>
-                  <div className="text-xs text-gray-400">سايبر كافيه تحت إدارتنا</div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    </section>
-  );
-};
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [maintenance, setMaintenance] = useState<Maintenance[]>([]);
 
-const ServiceCard = ({ icon: Icon, title, description, features }: { icon: any, title: string, description: string, features: string[] }) => (
-  <motion.div 
-    whileHover={{ y: -10 }}
-    className="glass-card p-8 rounded-3xl border border-white/5 hover:border-neon-blue/30 transition-all group"
-  >
-    <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-6 group-hover:bg-neon-blue/10 transition-colors">
-      <Icon className="w-8 h-8 text-gray-400 group-hover:text-neon-blue transition-colors" />
-    </div>
-    <h3 className="text-2xl font-bold mb-4">{title}</h3>
-    <p className="text-gray-400 mb-6 text-sm leading-relaxed">{description}</p>
-    <ul className="space-y-3">
-      {features.map((feature, idx) => (
-        <li key={idx} className="flex items-center gap-2 text-xs text-gray-300">
-          <CheckCircle2 className="w-4 h-4 text-neon-blue" />
-          <span>{feature}</span>
-        </li>
-      ))}
-    </ul>
-  </motion.div>
-);
+  const [query, setQuery] = useState('');
 
-const Services = () => {
-  const services = [
-    {
-      icon: Wrench,
-      title: "صيانة الهاردوير",
-      description: "صيانة دورية وشاملة لجميع أجهزة الكمبيوتر والشاشات والملحقات لضمان أفضل أداء.",
-      features: ["تنظيف الأجهزة وتغيير المعجون الحراري", "إصلاح أعطال البور سبلاي والماذربورد", "تطوير قطع الأجهزة (RAM, SSD)"]
-    },
-    {
-      icon: Network,
-      title: "إدارة الشبكات",
-      description: "تصميم وتنفيذ شبكات احترافية تضمن أقل Ping ممكن للاعبين واستقرار تام.",
-      features: ["تركيب وبرمجة الراوترات والسويتشات", "توزيع السرعات ومنع التقطيع", "تأمين الشبكة من الاختراق"]
-    },
-    {
-      icon: Server,
-      title: "أنظمة السيرفرات",
-      description: "إعداد سيرفرات Diskless وسيرفرات الألعاب لتوفير التكاليف وسهولة الإدارة.",
-      features: ["تركيب نظام CCBoot أو iCafeCloud", "تحديث الألعاب بضغطة واحدة", "توفير استهلاك الكهرباء والهاردات"]
-    },
-    {
-      icon: Monitor,
-      title: "الدعم البرمجي",
-      description: "تثبيت وتفعيل أنظمة التشغيل والبرامج والألعاب مع ضبط الإعدادات المثالية.",
-      features: ["نسخ ويندوز معدلة للألعاب", "حل مشاكل الكراش واللاج", "تثبيت برامج المحاسبة والإدارة"]
+  const filteredTasks = useMemo(() => tasks.filter((task) => `${task.title} ${task.description}`.includes(query)), [tasks, query]);
+
+  async function loadData(authToken: string) {
+    setLoading(true);
+    try {
+      const [dashboardData, tasksData, ticketsData, devicesData, maintenanceData] = await Promise.all([
+        apiFetch<DashboardData>('/dashboard', authToken),
+        apiFetch<Task[]>('/tasks', authToken),
+        apiFetch<Ticket[]>('/tickets', authToken),
+        apiFetch<Device[]>('/devices', authToken),
+        apiFetch<Maintenance[]>('/maintenance', authToken)
+      ]);
+
+      setDashboard(dashboardData);
+      setTasks(tasksData);
+      setTickets(ticketsData);
+      setDevices(devicesData);
+      setMaintenance(maintenanceData);
+      setError('');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
     }
-  ];
+  }
 
-  return (
-    <section id="services" className="py-24 bg-black/20">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-sm font-bold text-neon-purple uppercase tracking-widest mb-4">خدماتنا التقنية</h2>
-          <p className="text-4xl md:text-5xl font-black mb-6">حلول متكاملة لمشروعك</p>
-          <div className="w-24 h-1 bg-gradient-to-r from-neon-blue to-neon-purple mx-auto rounded-full" />
-        </div>
-        
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {services.map((service, idx) => (
-            <ServiceCard key={idx} {...service} />
-          ))}
-        </div>
+  useEffect(() => {
+    if (!token) return;
+    loadData(token);
+  }, [token]);
+
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    try {
+      const result = await login(String(form.get('email')), String(form.get('password')));
+      setToken(result.token);
+      setError('');
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <form onSubmit={handleLogin} className="w-full max-w-md bg-white rounded-3xl p-8 shadow-xl border border-slate-200">
+          <h1 className="text-2xl font-black mb-2">نظام WorkDesk Pro</h1>
+          <p className="text-slate-500 mb-6">إدارة العمل اليومي لقسم تقنية المعلومات</p>
+          <div className="space-y-4">
+            <input name="email" defaultValue="admin@workdesk.local" className="w-full rounded-xl border border-slate-200 px-4 py-3" />
+            <input name="password" type="password" defaultValue="Admin@123" className="w-full rounded-xl border border-slate-200 px-4 py-3" />
+            <button className="w-full rounded-xl bg-blue-600 text-white py-3 font-bold">تسجيل الدخول</button>
+          </div>
+          <p className="text-xs text-slate-400 mt-3">بيانات تجريبية: admin@workdesk.local / Admin@123</p>
+          {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
+        </form>
       </div>
-    </section>
-  );
-};
+    );
+  }
 
-const Features = () => {
   return (
-    <section id="features" className="py-24 relative overflow-hidden">
-      <div className="absolute top-1/2 left-0 w-[400px] h-[400px] bg-neon-purple/5 blur-[100px] rounded-full" />
-      
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          <div className="order-2 lg:order-1">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="glass-card p-6 rounded-2xl border-white/5">
-                <div className="w-12 h-12 rounded-xl bg-neon-blue/10 flex items-center justify-center mb-4">
-                  <Headphones className="text-neon-blue w-6 h-6" />
-                </div>
-                <h4 className="font-bold mb-2">دعم 24/7</h4>
-                <p className="text-xs text-gray-400">نحن معك في أي وقت لحل المشاكل الطارئة.</p>
+    <div className="min-h-screen bg-slate-100 text-slate-800">
+      <div className="grid lg:grid-cols-[270px_1fr] min-h-screen">
+        <aside className="bg-slate-900 text-white p-5 space-y-3">
+          <h1 className="text-xl font-black">WorkDesk Pro</h1>
+          <p className="text-xs text-slate-400">نظام إدارة IT Administration</p>
+          {modules.map((item) => {
+            const Icon = item.icon;
+            const active = activePage === item.key;
+            return (
+              <button
+                key={item.key}
+                className={`w-full text-right px-3 py-2 rounded-xl flex items-center gap-3 ${active ? 'bg-blue-600' : 'bg-slate-800'}`}
+                onClick={() => setActivePage(item.key as Page)}
+              >
+                <Icon className="w-4 h-4" />
+                {item.label}
+              </button>
+            );
+          })}
+        </aside>
+
+        <main className="p-6 space-y-6">
+          <section className="bg-white rounded-2xl border border-slate-200 p-5">
+            <h2 className="font-black text-xl">وصف المشروع والمتطلبات</h2>
+            <p className="text-slate-600 mt-2">منصة ويب عربية (RTL) لإدارة المهام والدعم الفني والأصول والصيانة مع تقارير تفصيلية.</p>
+            <div className="grid md:grid-cols-2 gap-6 mt-4">
+              <div>
+                <h3 className="font-bold mb-2">Software Requirements</h3>
+                <ul className="list-disc mr-5 space-y-1 text-sm text-slate-600">
+                  {requirements.map((item) => <li key={item}>{item}</li>)}
+                </ul>
               </div>
-              <div className="glass-card p-6 rounded-2xl border-white/5 translate-y-8">
-                <div className="w-12 h-12 rounded-xl bg-neon-purple/10 flex items-center justify-center mb-4">
-                  <ExternalLink className="text-neon-purple w-6 h-6" />
+              <div>
+                <h3 className="font-bold mb-2">هيكل قاعدة البيانات</h3>
+                <div className="flex flex-wrap gap-2 text-sm">
+                  {dbTables.map((table) => <span key={table} className="px-3 py-1 rounded-full bg-slate-100 border">{table}</span>)}
                 </div>
-                <h4 className="font-bold mb-2">دعم عن بعد</h4>
-                <p className="text-xs text-gray-400">حل المشاكل البرمجية فوراً عبر TeamViewer.</p>
-              </div>
-              <div className="glass-card p-6 rounded-2xl border-white/5">
-                <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center mb-4">
-                  <ShieldCheck className="text-green-500 w-6 h-6" />
-                </div>
-                <h4 className="font-bold mb-2">ضمان حقيقي</h4>
-                <p className="text-xs text-gray-400">ضمان على جميع قطع الغيار وأعمال الصيانة.</p>
-              </div>
-              <div className="glass-card p-6 rounded-2xl border-white/5 translate-y-8">
-                <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center mb-4">
-                  <Zap className="text-orange-500 w-6 h-6" />
-                </div>
-                <h4 className="font-bold mb-2">استجابة سريعة</h4>
-                <p className="text-xs text-gray-400">نصل إليك في أسرع وقت ممكن داخل القاهرة والجيزة.</p>
               </div>
             </div>
-          </div>
-          
-          <div className="order-1 lg:order-2">
-            <h2 className="text-sm font-bold text-neon-blue uppercase tracking-widest mb-4">لماذا تختار المبرمج؟</h2>
-            <h3 className="text-4xl md:text-5xl font-black mb-8 leading-tight">شريكك التقني في رحلة <span className="neon-text-purple">النجاح</span></h3>
-            <p className="text-gray-400 mb-8 leading-relaxed">
-              نحن لا نقوم فقط بالإصلاح، بل نقوم بتحسين بيئة العمل بالكامل. خبرتنا الطويلة في إدارة كبرى مقاهي الألعاب تجعلنا نفهم احتياجاتك واحتياجات عملائك بدقة.
-            </p>
-            <ul className="space-y-4">
-              {[
-                "تقليل وقت تعطل الأجهزة بنسبة 90%",
-                "توفير في استهلاك الإنترنت والكهرباء",
-                "تحديثات دورية للألعاب والبرامج",
-                "استشارات تقنية مجانية لعملائنا"
-              ].map((item, idx) => (
-                <li key={idx} className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-neon-blue/20 flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4 text-neon-blue" />
-                  </div>
-                  <span className="font-medium">{item}</span>
-                </li>
+          </section>
+
+          {dashboard && activePage === 'dashboard' && (
+            <>
+              <section className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <StatCard label="المهام المفتوحة" value={dashboard.summary.openTasks} icon={ClipboardList} />
+                <StatCard label="التذاكر المفتوحة" value={dashboard.summary.openTickets} icon={LifeBuoy} />
+                <StatCard label="الأجهزة النشطة" value={dashboard.summary.activeDevices} icon={HardDrive} />
+                <StatCard label="الصيانة المجدولة" value={dashboard.summary.plannedMaintenance} icon={Bell} />
+              </section>
+              <section className="grid lg:grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl p-5 border border-slate-200">
+                  <h3 className="font-bold mb-3">حالة التذاكر</h3>
+                  {dashboard.charts.ticketsByStatus.map((item) => (
+                    <div key={item.label} className="mb-2">
+                      <div className="flex justify-between text-sm"><span>{item.label}</span><span>{item.value}</span></div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500" style={{width: `${item.value * 25}%`}} /></div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-white rounded-2xl p-5 border border-slate-200">
+                  <h3 className="font-bold mb-3">أولوية المهام</h3>
+                  {dashboard.charts.tasksByPriority.map((item) => (
+                    <div key={item.label} className="mb-2 flex justify-between border-b pb-2"><span>{item.label}</span><span className="font-bold">{item.value}</span></div>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          {activePage === 'tasks' && (
+            <section className="bg-white rounded-2xl p-5 border border-slate-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold">إدارة المهام اليومية</h3>
+                <div className="relative">
+                  <Search className="absolute right-2 top-2.5 w-4 h-4 text-slate-400" />
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} className="border rounded-lg pr-8 pl-3 py-2" placeholder="بحث في المهام" />
+                </div>
+              </div>
+              <table className="w-full text-sm">
+                <thead><tr className="text-right border-b"><th>العنوان</th><th>الحالة</th><th>الأولوية</th><th>المسؤول</th><th>تاريخ الانتهاء</th></tr></thead>
+                <tbody>
+                  {filteredTasks.map((task) => <tr key={task.id} className="border-b"><td className="py-2">{task.title}</td><td>{task.status}</td><td>{task.priority}</td><td>{task.assignee_name}</td><td>{task.due_date}</td></tr>)}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {activePage === 'tickets' && (
+            <section className="bg-white rounded-2xl p-5 border border-slate-200 overflow-auto">
+              <h3 className="font-bold mb-3">طلبات الدعم والتذاكر</h3>
+              <table className="w-full text-sm">
+                <thead><tr className="text-right border-b"><th>رقم التذكرة</th><th>النوع</th><th>الوصف</th><th>الحالة</th><th>الأولوية</th></tr></thead>
+                <tbody>
+                  {tickets.map((ticket) => <tr key={ticket.id} className="border-b"><td className="py-2">{ticket.ticket_number}</td><td>{ticket.issue_type}</td><td>{ticket.description}</td><td>{ticket.status}</td><td>{ticket.priority}</td></tr>)}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {activePage === 'devices' && (
+            <section className="bg-white rounded-2xl p-5 border border-slate-200 overflow-auto">
+              <h3 className="font-bold mb-3">إدارة الأجهزة والمعدات</h3>
+              <table className="w-full text-sm">
+                <thead><tr className="text-right border-b"><th>الجهاز</th><th>النوع</th><th>الموديل</th><th>الرقم التسلسلي</th><th>المستخدم</th><th>الحالة</th></tr></thead>
+                <tbody>
+                  {devices.map((device) => <tr key={device.id} className="border-b"><td className="py-2">{device.name}</td><td>{device.type}</td><td>{device.model}</td><td>{device.serial_number}</td><td>{device.assigned_user_name || '-'}</td><td>{device.status}</td></tr>)}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {activePage === 'maintenance' && (
+            <section className="bg-white rounded-2xl p-5 border border-slate-200">
+              <h3 className="font-bold mb-3">الصيانة الدورية</h3>
+              {maintenance.map((item) => (
+                <div key={item.id} className="border rounded-xl p-3 mb-3 bg-slate-50">
+                  <p className="font-bold">{item.device_name}</p>
+                  <p className="text-sm">{item.maintenance_type} - {item.maintenance_date}</p>
+                  <p className="text-sm text-slate-500">الفني: {item.technician_name} | الحالة: {item.status}</p>
+                </div>
               ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-};
+            </section>
+          )}
 
-const Contact = () => {
-  return (
-    <section id="contact" className="py-24">
-      <div className="max-w-5xl mx-auto px-4">
-        <div className="glass-card rounded-[40px] p-12 text-center relative overflow-hidden border border-neon-blue/20">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-blue to-neon-purple" />
-          
-          <h2 className="text-4xl md:text-5xl font-black mb-6">هل أنت جاهز لتطوير السايبر الخاص بك؟</h2>
-          <p className="text-gray-400 mb-10 max-w-2xl mx-auto">
-            لا تترك عملك للصدفة. تواصل معنا اليوم للحصول على عرض سعر مخصص لصيانة وتطوير مقهى الإنترنت الخاص بك.
-          </p>
-          
-          <div className="flex flex-col md:flex-row items-center justify-center gap-6">
-            <a 
-              href="https://wa.me/201515049844" 
-              className="w-full md:w-auto flex items-center justify-center gap-3 px-10 py-5 bg-[#25D366] text-white font-bold rounded-2xl hover:scale-105 transition-transform shadow-[0_0_30px_rgba(37,211,102,0.2)]"
-            >
-              <MessageCircle className="w-6 h-6" />
-              <span className="text-lg">تواصل عبر واتساب</span>
-            </a>
-            <div className="flex flex-col items-center md:items-start">
-              <span className="text-sm text-gray-500">أو اتصل بنا مباشرة:</span>
-              <span className="text-xl font-bold text-neon-blue">01515049844</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-};
+          {activePage === 'reports' && (
+            <section className="bg-white rounded-2xl p-5 border border-slate-200">
+              <h3 className="font-bold mb-3">التقارير والإحصائيات</h3>
+              <ul className="space-y-2 text-sm text-slate-600">
+                <li>• تقرير أداء فريق الدعم حسب عدد التذاكر المغلقة.</li>
+                <li>• تقرير الأجهزة المعطلة والمتكررة الأعطال.</li>
+                <li>• تقرير الالتزام بخطط الصيانة الدورية.</li>
+                <li>• تقرير المهام المتأخرة ونسب الإنجاز الأسبوعية.</li>
+              </ul>
+              <div className="mt-4 p-4 rounded-xl bg-blue-50 text-blue-800 border border-blue-100 flex gap-2">
+                <ShieldCheck className="w-5 h-5" />
+                <p className="text-sm">تم تصميم النظام ببنية قابلة للتوسع (REST API + SQLite) ويمكن الترقية لاحقًا إلى PostgreSQL وRBAC متقدم.</p>
+              </div>
+            </section>
+          )}
 
-const Footer = () => {
-  return (
-    <footer className="py-12 border-t border-white/5">
-      <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-8">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-neon-blue to-neon-purple rounded-lg flex items-center justify-center">
-            <Cpu className="text-white w-5 h-5" />
-          </div>
-          <span className="text-xl font-black neon-text-blue">المبرمج</span>
-        </div>
-        
-        <p className="text-sm text-gray-500">
-          © {new Date().getFullYear()} المبرمج للدعم الفني. جميع الحقوق محفوظة.
-        </p>
-        
-        <div className="flex items-center gap-6 text-gray-500 text-sm">
-          <a href="#" className="hover:text-neon-blue transition-colors">سياسة الخصوصية</a>
-          <a href="#" className="hover:text-neon-blue transition-colors">الشروط والأحكام</a>
-        </div>
+          {loading && <p className="text-sm text-slate-500">جارِ تحميل البيانات...</p>}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </main>
       </div>
-    </footer>
-  );
-};
-
-export default function App() {
-  return (
-    <div className="min-h-screen selection:bg-neon-blue selection:text-dark-bg">
-      <Navbar />
-      <main>
-        <Hero />
-        <Services />
-        <Features />
-        <Contact />
-      </main>
-      <Footer />
     </div>
   );
 }
+
+export default App;
